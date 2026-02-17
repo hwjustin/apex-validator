@@ -1,0 +1,39 @@
+{
+  "name": "apex-validator",
+  "version": "1.0.0",
+  "description": "APEX Validator Service - Monitors on-chain purchase events and processes ad settlement payments on Base Mainnet",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "apex",
+    "validator",
+    "blockchain",
+    "base-mainnet",
+    "settlement"
+  ],
+  "author": "APEX Network",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "viem": "^2.44.4",
+    "dotenv": "^16.4.5",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
