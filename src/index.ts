@@ -1,17 +1,15 @@
-import { formatUnits } from 'viem';
 import { config } from './config.js';
 import { initRegistry } from './registry.js';
-import { initPayment, getValidatorAddress, getValidatorUsdcBalance } from './payment.js';
+import { initPayment, getValidatorAddress } from './payment.js';
 import { startMonitor, stopMonitor } from './monitor.js';
 import { logger } from './utils/logger.js';
-
-const USDC_DECIMALS = 6;
 
 /**
  * APEX Validator Service
  *
  * Monitors ProductPurchased events on Base Mainnet and settles
- * USDC payments to publishers who served the ads that led to the purchase.
+ * payments to publishers via CampaignRegistry.processAction().
+ * The validator's wallet needs ETH for gas to submit settlement transactions.
  */
 async function main(): Promise<void> {
   logger.info('Starting APEX Validator Service (Base Mainnet)');
@@ -26,32 +24,16 @@ async function main(): Promise<void> {
   // Log configuration
   const validatorAddress = getValidatorAddress();
 
-  // Check validator USDC balance
-  const usdcBalance = await getValidatorUsdcBalance();
-
   logger.info({
     validatorAddress,
-    usdcBalance: formatUnits(usdcBalance, USDC_DECIMALS) + ' USDC',
-    settlementAmount: config.settlement.amountUsdc + ' USDC',
+    validatorId: config.validatorId.toString(),
     contracts: {
       demoPurchase: config.contracts.demoPurchase,
       adRegistry: config.contracts.adRegistry,
+      campaignRegistry: config.contracts.campaignRegistry,
       identityRegistry: config.contracts.identityRegistry,
-      usdc: config.contracts.usdc,
     },
   }, 'Validator configuration');
-
-  // Warn if USDC balance is low
-  const estimatedSettlements = usdcBalance / config.settlement.amountRaw;
-  if (estimatedSettlements < 10n) {
-    logger.warn(
-      {
-        usdcBalance: formatUnits(usdcBalance, USDC_DECIMALS) + ' USDC',
-        estimatedSettlements: estimatedSettlements.toString(),
-      },
-      'Low validator USDC balance - may run out of funds for settlements'
-    );
-  }
 
   // Start the event monitor
   await startMonitor();

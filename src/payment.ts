@@ -1,41 +1,20 @@
 import {
   createWalletClient,
   http,
-  formatUnits,
+  keccak256,
+  encodePacked,
   type WalletClient,
   type Account,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { config } from './config.js';
-import { getPublicClient } from './registry.js';
+import { isActionProcessed } from './registry.js';
+import { CAMPAIGN_REGISTRY_ABI } from './abis/CampaignRegistry.js';
 import { createChildLogger } from './utils/logger.js';
 import type { SettlementInfo } from './settlement.js';
 
 const logger = createChildLogger('payment');
-
-const USDC_DECIMALS = 6;
-
-// Minimal ERC-20 ABI for transfer and balanceOf
-const ERC20_ABI = [
-  {
-    type: 'function',
-    name: 'transfer',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    name: 'balanceOf',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-] as const;
 
 let walletClient: WalletClient;
 let validatorAccount: Account;
@@ -46,10 +25,13 @@ let validatorAccount: Account;
 export function initPayment(): { walletClient: WalletClient; account: Account } {
   validatorAccount = privateKeyToAccount(config.validatorPrivateKey);
 
+  // Wallet client uses HTTP — derive from WSS URL if needed
+  const httpUrl = config.rpcUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+
   walletClient = createWalletClient({
     account: validatorAccount,
     chain: base,
-    transport: http(config.rpcUrl),
+    transport: http(httpUrl),
   });
 
   logger.info(
@@ -75,33 +57,64 @@ function getBackoffDelay(attempt: number): number {
   return Math.min(delay, config.retry.maxDelayMs);
 }
 
+/**
+ * Generate a deterministic action hash from purchaseId + adId
+ */
+function generateActionHash(purchaseId: bigint, adId: bigint): `0x${string}` {
+  return keccak256(encodePacked(['uint256', 'uint256'], [purchaseId, adId]));
+}
+
 export interface PaymentResult {
   success: boolean;
   transactionHash?: `0x${string}`;
+  actionHash?: `0x${string}`;
   error?: string;
   attempts: number;
 }
 
 /**
- * Execute a USDC settlement payment to the publisher
+ * Execute a settlement by calling processAction() on CampaignRegistry
  *
- * Transfers the configured USDC amount to the publisher wallet
- * with retry logic for failed transactions
+ * This triggers the campaign's escrowed budget to pay the publisher
+ * the CPA amount defined in the campaign.
  */
 export async function executePayment(settlement: SettlementInfo): Promise<PaymentResult> {
-  const { publisherWallet, publisherId, adId, purchaseEvent } = settlement;
-  const amount = config.settlement.amountRaw;
+  const { publisherId, adId, campaignId, purchaseEvent } = settlement;
+  const actionHash = generateActionHash(purchaseEvent.purchaseId, adId);
 
   logger.info(
     {
-      publisherWallet,
+      campaignId: campaignId.toString(),
       publisherId: publisherId.toString(),
       adId: adId.toString(),
       purchaseId: purchaseEvent.purchaseId.toString(),
-      amount: formatUnits(amount, USDC_DECIMALS) + ' USDC',
+      validatorId: config.validatorId.toString(),
+      actionHash,
     },
-    'Executing USDC settlement payment'
+    'Executing processAction settlement'
   );
+
+  // Check if action was already processed
+  try {
+    const alreadyProcessed = await isActionProcessed(actionHash);
+    if (alreadyProcessed) {
+      logger.warn(
+        { actionHash, purchaseId: purchaseEvent.purchaseId.toString(), adId: adId.toString() },
+        'Action already processed — skipping duplicate'
+      );
+      return {
+        success: false,
+        actionHash,
+        error: 'Action already processed',
+        attempts: 0,
+      };
+    }
+  } catch (error) {
+    logger.warn(
+      { error, actionHash },
+      'Failed to check if action is already processed — proceeding anyway'
+    );
+  }
 
   let lastError: string | undefined;
 
@@ -111,17 +124,16 @@ export async function executePayment(settlement: SettlementInfo): Promise<Paymen
         const delay = getBackoffDelay(attempt - 1);
         logger.debug(
           { attempt: attempt + 1, delayMs: delay },
-          'Retrying payment after delay'
+          'Retrying processAction after delay'
         );
         await sleep(delay);
       }
 
-      // Transfer USDC to publisher wallet on Base Mainnet
       const hash = await walletClient.writeContract({
-        address: config.contracts.usdc,
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [publisherWallet, amount],
+        address: config.contracts.campaignRegistry,
+        abi: CAMPAIGN_REGISTRY_ABI,
+        functionName: 'processAction',
+        args: [campaignId, publisherId, config.validatorId, actionHash],
         chain: base,
         account: validatorAccount,
       });
@@ -129,18 +141,19 @@ export async function executePayment(settlement: SettlementInfo): Promise<Paymen
       logger.info(
         {
           transactionHash: hash,
-          publisherWallet,
+          actionHash,
+          campaignId: campaignId.toString(),
           publisherId: publisherId.toString(),
-          amount: formatUnits(amount, USDC_DECIMALS) + ' USDC',
           purchaseId: purchaseEvent.purchaseId.toString(),
           attempts: attempt + 1,
         },
-        'USDC settlement payment sent successfully'
+        'processAction settlement sent successfully'
       );
 
       return {
         success: true,
         transactionHash: hash,
+        actionHash,
         attempts: attempt + 1,
       };
     } catch (error) {
@@ -150,45 +163,33 @@ export async function executePayment(settlement: SettlementInfo): Promise<Paymen
       logger.error(
         {
           error: errorMessage,
-          publisherWallet,
+          campaignId: campaignId.toString(),
+          publisherId: publisherId.toString(),
           attempt: attempt + 1,
           maxAttempts: config.retry.maxAttempts,
         },
-        'Payment attempt failed'
+        'processAction attempt failed'
       );
     }
   }
 
   logger.error(
     {
-      publisherWallet,
+      campaignId: campaignId.toString(),
       publisherId: publisherId.toString(),
       purchaseId: purchaseEvent.purchaseId.toString(),
       attempts: config.retry.maxAttempts,
       lastError,
     },
-    'USDC settlement payment failed after all retries'
+    'processAction settlement failed after all retries'
   );
 
   return {
     success: false,
+    actionHash,
     error: lastError,
     attempts: config.retry.maxAttempts,
   };
-}
-
-/**
- * Get the validator's USDC balance
- */
-export async function getValidatorUsdcBalance(): Promise<bigint> {
-  const publicClient = getPublicClient();
-  const balance = await publicClient.readContract({
-    address: config.contracts.usdc,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: [validatorAccount.address],
-  });
-  return balance;
 }
 
 /**

@@ -19,6 +19,7 @@ export interface SettlementInfo {
   publisherWallet: `0x${string}`;
   publisherId: bigint;
   adId: bigint;
+  campaignId: bigint;
   purchaseEvent: PurchaseEvent;
 }
 
@@ -208,6 +209,7 @@ export async function getSettlementInfo(event: PurchaseEvent): Promise<Settlemen
       publisherWallet,
       publisherId: ad.publisherId,
       adId: ad.adId,
+      campaignId: ad.campaignId,
       purchaseEvent: event,
     };
   } catch (error) {

@@ -1,7 +1,8 @@
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, webSocket } from 'viem';
 import { base } from 'viem/chains';
 import { config } from './config.js';
 import { AD_REGISTRY_ABI, type Ad } from './abis/AdRegistry.js';
+import { CAMPAIGN_REGISTRY_ABI, type Campaign } from './abis/CampaignRegistry.js';
 import { IDENTITY_REGISTRY_ABI } from './abis/IdentityRegistry.js';
 import { DEMO_PURCHASE_ABI, type Product } from './abis/DemoPurchase.js';
 import { createChildLogger } from './utils/logger.js';
@@ -15,11 +16,14 @@ let publicClient: any;
  * Initialize the public client for reading from contracts
  */
 export function initRegistry(): any {
+  const isWebSocket = config.rpcUrl.startsWith('wss://') || config.rpcUrl.startsWith('ws://');
+  const transport = isWebSocket ? webSocket(config.rpcUrl) : http(config.rpcUrl);
+
   publicClient = createPublicClient({
     chain: base,
-    transport: http(config.rpcUrl),
+    transport,
   });
-  logger.info('Registry client initialized');
+  logger.info({ transport: isWebSocket ? 'WebSocket' : 'HTTP' }, 'Registry client initialized');
   return publicClient;
 }
 
@@ -91,6 +95,34 @@ export async function getAgentWallet(agentId: bigint): Promise<`0x${string}`> {
   });
 
   return owner as `0x${string}`;
+}
+
+/**
+ * Get campaign details from CampaignRegistry
+ */
+export async function getCampaign(campaignId: bigint): Promise<Campaign> {
+  const campaign = await publicClient.readContract({
+    address: config.contracts.campaignRegistry,
+    abi: CAMPAIGN_REGISTRY_ABI,
+    functionName: 'getCampaign',
+    args: [campaignId],
+  });
+
+  return campaign as Campaign;
+}
+
+/**
+ * Check if an action hash has already been processed
+ */
+export async function isActionProcessed(actionHash: `0x${string}`): Promise<boolean> {
+  const processed = await publicClient.readContract({
+    address: config.contracts.campaignRegistry,
+    abi: CAMPAIGN_REGISTRY_ABI,
+    functionName: 'isActionProcessed',
+    args: [actionHash],
+  });
+
+  return processed as boolean;
 }
 
 /**
