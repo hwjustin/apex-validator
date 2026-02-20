@@ -3,9 +3,12 @@ import {
   http,
   keccak256,
   encodePacked,
+  encodeFunctionData,
+  type Hex,
   type WalletClient,
   type Account,
 } from 'viem';
+import { Attribution } from 'ox/erc8021';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { config } from './config.js';
@@ -15,6 +18,9 @@ import { createChildLogger } from './utils/logger.js';
 import type { SettlementInfo } from './settlement.js';
 
 const logger = createChildLogger('payment');
+
+// ERC-8021 builder code suffix for Base attribution
+const BUILDER_CODE_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_koehzjn1'] });
 
 let walletClient: WalletClient;
 let validatorAccount: Account;
@@ -129,11 +135,17 @@ export async function executePayment(settlement: SettlementInfo): Promise<Paymen
         await sleep(delay);
       }
 
-      const hash = await walletClient.writeContract({
-        address: config.contracts.campaignRegistry,
+      // Encode calldata and append ERC-8021 builder code suffix for Base attribution
+      const calldata = encodeFunctionData({
         abi: CAMPAIGN_REGISTRY_ABI,
         functionName: 'processAction',
         args: [campaignId, publisherId, config.validatorId, actionHash],
+      });
+      const dataWithAttribution = (calldata + BUILDER_CODE_SUFFIX.slice(2)) as Hex;
+
+      const hash = await walletClient.sendTransaction({
+        to: config.contracts.campaignRegistry,
+        data: dataWithAttribution,
         chain: base,
         account: validatorAccount,
       });

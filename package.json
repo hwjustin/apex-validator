@@ -20,18 +20,19 @@
   "author": "APEX Network",
   "license": "Apache-2.0",
   "dependencies": {
-    "viem": "^2.44.4",
     "dotenv": "^16.4.5",
+    "ox": "^0.12.4",
     "pino": "^9.6.0",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "viem": "^2.44.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "typescript": "^5.7.0",
-    "tsx": "^4.19.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=20.0.0"
