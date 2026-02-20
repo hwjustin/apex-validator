@@ -112,6 +112,23 @@ export async function getCampaign(campaignId: bigint): Promise<Campaign> {
 }
 
 /**
+ * Check if a campaign is currently active (within time window and has budget)
+ */
+export async function isCampaignActive(campaignId: bigint): Promise<boolean> {
+  try {
+    const active = await publicClient.readContract({
+      address: config.contracts.campaignRegistry,
+      abi: CAMPAIGN_REGISTRY_ABI,
+      functionName: 'isCampaignActive',
+      args: [campaignId],
+    });
+    return active as boolean;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if an action hash has already been processed
  */
 export async function isActionProcessed(actionHash: `0x${string}`): Promise<boolean> {

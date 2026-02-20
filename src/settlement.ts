@@ -1,5 +1,5 @@
 import { createChildLogger } from './utils/logger.js';
-import { getProduct, getAdsByAdvertiser, getAd, getAgentWallet } from './registry.js';
+import { getProduct, getAdsByAdvertiser, getAd, getAgentWallet, isCampaignActive } from './registry.js';
 import type { Ad } from './abis/AdRegistry.js';
 import { decodeAbiParameters, parseAbiParameters } from 'viem';
 
@@ -105,9 +105,11 @@ export async function findMatchingAd(event: PurchaseEvent): Promise<Ad | null> {
     );
 
     // Step 3: Find ad with buyer's wallet in metadata
+    // Iterate newest-first so we match the most recent ad (and active campaign)
     const buyerAddressLower = event.buyer.toLowerCase();
 
-    for (const adId of adIds) {
+    for (let i = adIds.length - 1; i >= 0; i--) {
+      const adId = adIds[i];
       const ad = await getAd(adId);
       const metadata = parseAdMetadata(ad.metadata);
 
@@ -126,9 +128,23 @@ export async function findMatchingAd(event: PurchaseEvent): Promise<Ad | null> {
       if (metadata?.userWallet) {
         const adUserWalletLower = metadata.userWallet.toLowerCase();
         if (adUserWalletLower === buyerAddressLower) {
+          // Verify the ad's campaign is still active before returning
+          const active = await isCampaignActive(ad.campaignId);
+          if (!active) {
+            logger.debug(
+              {
+                adId: adId.toString(),
+                campaignId: ad.campaignId.toString(),
+              },
+              'Skipping ad — campaign is no longer active'
+            );
+            continue;
+          }
+
           logger.info(
             {
               adId: adId.toString(),
+              campaignId: ad.campaignId.toString(),
               publisherId: ad.publisherId.toString(),
               buyer: event.buyer,
             },
