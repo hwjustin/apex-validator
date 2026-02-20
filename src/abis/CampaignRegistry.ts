@@ -1,6 +1,6 @@
 /**
  * CampaignRegistry Contract ABI
- * Contract Address: 0x8c2b543fa5d8740e40306e372dd4bcf6af3f5266 (Base Mainnet)
+ * Contract Address: 0x23ed7bbd9f4fb7d8fa98a13f1cce3484947cd689 (Base Mainnet)
  */
 
 export const CAMPAIGN_REGISTRY_ABI = [

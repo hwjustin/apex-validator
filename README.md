@@ -87,7 +87,7 @@ pm2 start ecosystem.config.js --env production
 |----------|-------------|---------|
 | `RPC_URL` | Base Mainnet RPC endpoint | Required |
 | `DEMO_PURCHASE_ADDRESS` | DemoPurchase contract address | `0x7f34ec8b18e05af38d771cb50382fa15fc30a1d1` |
-| `AD_REGISTRY_ADDRESS` | AdRegistry contract address | `0x15dacc499e88c626ed715b5f77c7e5e201c8c805` |
+| `AD_REGISTRY_ADDRESS` | AdRegistry contract address | `0x5734e51dc16802b9724f4e1b877b39ccc01985c2` |
 | `IDENTITY_REGISTRY_ADDRESS` | IdentityRegistry contract address | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | `USDC_ADDRESS` | USDC token contract address | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `VALIDATOR_PRIVATE_KEY` | Private key for validator wallet | Required |

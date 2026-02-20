@@ -1,6 +1,6 @@
 /**
  * AdRegistry Contract ABI
- * Contract Address: 0x82dc7de34418314de0853c787d3fb634342b3c58 (Base Mainnet)
+ * Contract Address: 0x5734e51dc16802b9724f4e1b877b39ccc01985c2 (Base Mainnet)
  */
 
 export const AD_REGISTRY_ABI = [
